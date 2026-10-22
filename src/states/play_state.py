@@ -151,7 +151,8 @@ class PlayState:
                     if isinstance(enemy, Boss):
                         self.score += 1000
                         self.boss = None
-                        self.trigger_shake(duration=0.6, intensity=18)
+                        # CHỈNH SỬA TẠI ĐÂY: Giảm rung khi đạn bắn chết Boss
+                        self.trigger_shake(duration=0.4, intensity=5)
                         self.is_victory = True
                     else:
                         self.score += 100
@@ -181,7 +182,8 @@ class PlayState:
             if isinstance(hit, Boss):
                 self.player.hp -= 50
                 self.boss = None
-                self.trigger_shake(duration=0.6, intensity=18)
+                # CHỈNH SỬA TẠI ĐÂY: Giảm rung khi người chơi đâm trúng Boss chết
+                self.trigger_shake(duration=0.4, intensity=5)
                 self.is_victory = True
             else:
                 self.player.hp -= 20
@@ -214,13 +216,9 @@ class PlayState:
         self.boss.max_hp = self.stage_config["boss_hp"]
         self.boss.hp = self.boss.max_hp
 
-    # --- HÀM VẼ TEXT CÓ ĐỔ BÓNG GIÚP CHỮ NỔI BẬT ---
     def draw_text_with_shadow(self, surface, text, font, color, pos):
-        # Đổ bóng đen lệch xuống dưới phải 2px
         shadow = font.render(text, True, BLACK)
         surface.blit(shadow, (pos[0] + 2, pos[1] + 2))
-        
-        # Chữ thật
         text_surf = font.render(text, True, color)
         surface.blit(text_surf, pos)
 
@@ -232,22 +230,18 @@ class PlayState:
         font_value = self.get_font(18 * s, bold=True)
         font_detail = self.get_font(11 * s, bold=False)
 
-        # --- LỚP NỀN MỜ CHO HUD TRÁI (GIÚP CHỮ KHÔNG BỊ CHÌM VÀO SAO) ---
         panel_w = int(240 * s)
         panel_h = int(120 * s)
         hud_bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        hud_bg.fill((0, 5, 15, 120)) # Nền đen hơi xanh mờ (120/255)
+        hud_bg.fill((0, 5, 15, 120))
         screen.blit(hud_bg, (0, 0))
 
         pad = int(20 * s)
-        
         c_len = int(12 * s)
         pygame.draw.line(screen, CYAN, (pad, pad), (pad + c_len, pad), 2)
         pygame.draw.line(screen, CYAN, (pad, pad), (pad, pad + c_len), 2)
         
-        # Thay màu Label sáng hơn chút
         label_color = (180, 190, 200)
-        
         self.draw_text_with_shadow(screen, "TACTICAL DATA", font_detail, (150, 200, 255), (pad + int(8 * s), pad + int(4 * s)))
 
         stg_color = self.stage_config["color"]
@@ -265,7 +259,6 @@ class PlayState:
         self.draw_text_with_shadow(screen, "KILLS //", font_hud, label_color, (col1_x, start_y + line_space * 2))
         self.draw_text_with_shadow(screen, str(self.total_kills), font_value, WHITE, (col2_x, start_y + line_space * 2 - int(3 * s)))
 
-        # Thanh tiến trình gọi Boss
         prog_w = int(200 * s)
         prog_h = int(2 * s)
         prog_x = pad + int(10 * s)
@@ -276,11 +269,8 @@ class PlayState:
         
         pygame.draw.rect(screen, (50, 60, 80), (prog_x, prog_y, prog_w, prog_h))
         pygame.draw.rect(screen, CYAN, (prog_x, prog_y, prog_w * ratio, prog_h))
-        
         self.draw_text_with_shadow(screen, f"BOSS PROTOCOL: {int(ratio*100)}%", font_detail, (150, 180, 200), (prog_x, prog_y + int(5 * s)))
 
-
-        # --- THANH MÁU BOSS ---
         if self.boss and self.boss.alive():
             boss_hp_ratio = self.boss.hp / self.boss.max_hp
             bar_w = int(min(400 * s, w * 0.5))
@@ -288,21 +278,16 @@ class PlayState:
             bar_x = (w - bar_w) // 2
             bar_y = int(40 * s)
 
-            # Cảnh báo: Đổi sang màu Đỏ Sáng (Bright Red) và thêm đổ bóng đen dày
             warning_alpha = abs(int(math.sin(self.time_elapsed * 8) * 255))
-            # Màu text: Đỏ sáng
             lbl_color = (255, max(50, 200 - warning_alpha), max(50, 200 - warning_alpha)) 
             warn_text = f"WARNING: ANOMALY DETECTED [{self.stage_config['name']}]"
             
-            # Vẽ viền bóng đen xung quanh để không bị chìm
             warn_surf = font_hud.render(warn_text, True, lbl_color)
             warn_rect = warn_surf.get_rect(center=(w // 2, bar_y - int(15 * s)))
             
-            # Tự đổ bóng bằng vòng lặp nhỏ
             for dx, dy in [(-1,-1), (-1,1), (1,-1), (1,1), (0,2)]:
                 shadow = font_hud.render(warn_text, True, BLACK)
                 screen.blit(shadow, (warn_rect.x + dx, warn_rect.y + dy))
-            
             screen.blit(warn_surf, warn_rect)
 
             pygame.draw.rect(screen, (80, 10, 10), (bar_x, bar_y, bar_w, bar_h))
@@ -310,69 +295,170 @@ class PlayState:
             pygame.draw.line(screen, WHITE, (bar_x, bar_y - int(4 * s)), (bar_x, bar_y + bar_h + int(4 * s)), 2)
             pygame.draw.line(screen, WHITE, (bar_x + bar_w, bar_y - int(4 * s)), (bar_x + bar_w, bar_y + bar_h + int(4 * s)), 2)
 
+    # --- MÀN HÌNH THẮNG (Đã bỏ chữ SYS, giữ UI chuẩn) ---
     def draw_victory_screen(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
         
-        font_large = self.get_font(40 * s, bold=True)
-        font_med = self.get_font(20 * s, bold=False)
+        title_font = self.get_font(48 * s, bold=True)
+        stats_font = self.get_font(24 * s, bold=False)
+        btn_font = self.get_font(20 * s, bold=True)
 
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-        overlay.fill((10, 30, 10, 220))
+        overlay.fill((10, 15, 25, 200))
         screen.blit(overlay, (0, 0))
 
-        title = font_large.render(f"SYS.OVERRIDE: STAGE {self.stage_id} CLEARED", True, CYAN)
-        screen.blit(title, title.get_rect(center=(w // 2, h // 2 - int(50 * s))))
+        # Đổi thành STAGE CLEARED
+        title_text = f"STAGE {self.stage_id} CLEARED"
+        title_surf = title_font.render(title_text, True, CYAN)
+        title_rect = title_surf.get_rect(center=(w // 2, h // 2 - int(120 * s)))
+        screen.blit(title_surf, title_rect)
 
-        stats = font_med.render(f"PILOT: {self.player_name} // SCORE: {self.score} // KILLS: {self.total_kills}", True, WHITE)
-        screen.blit(stats, stats.get_rect(center=(w // 2, h // 2 + int(10 * s))))
+        panel_width, panel_height = int(580 * s), int(80 * s)
+        panel_x = (w - panel_width) // 2
+        panel_y = h // 2 - int(40 * s)
+        
+        pygame.draw.rect(screen, (20, 25, 40), (panel_x, panel_y, panel_width, panel_height), border_radius=int(10*s))
+        pygame.draw.rect(screen, (0, 150, 150), (panel_x, panel_y, panel_width, panel_height), max(1, int(2*s)), border_radius=int(10*s))
+
+        pilot_surf = stats_font.render(f"PILOT: {self.player_name}", True, (200, 200, 200))
+        score_surf = stats_font.render(f"SCORE: {self.score}", True, (255, 215, 0))
+        kills_surf = stats_font.render(f"KILLS: {self.total_kills}", True, (255, 100, 100))
+
+        screen.blit(pilot_surf, (panel_x + int(30 * s), panel_y + int(25 * s)))
+        screen.blit(score_surf, (panel_x + int(250 * s), panel_y + int(25 * s)))
+        screen.blit(kills_surf, (panel_x + int(440 * s), panel_y + int(25 * s)))
 
         if self.stage_id < 4:
-            hint = "[N] NEXT STAGE   [R] REPLAY   [M] MENU   [Q] QUIT"
+            controls = [
+                ("N", "NEXT STAGE", (0, 255, 100)),
+                ("R", "REPLAY", (200, 200, 200)),
+                ("M", "MENU", (200, 200, 200)),
+                ("Q", "QUIT", (255, 80, 80))
+            ]
         else:
-            hint = "LEGENDARY PILOT!   [R] REPLAY   [M] MENU   [Q] QUIT"
+            controls = [
+                ("R", "REPLAY", (200, 200, 200)),
+                ("M", "MENU", (200, 200, 200)),
+                ("Q", "QUIT", (255, 80, 80))
+            ]
         
-        hint_surf = font_med.render(hint, True, (150, 200, 150))
-        screen.blit(hint_surf, hint_surf.get_rect(center=(w // 2, h // 2 + int(50 * s))))
+        total_btns = len(controls)
+        spacing = int(180 * s)
+        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
+        btn_y = h // 2 + int(90 * s)
 
+        for i, (key, label, color) in enumerate(controls):
+            x_pos = start_x + (i * spacing)
+            
+            key_surf = btn_font.render(f"[{key}]", True, WHITE)
+            key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
+            
+            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
+            screen.blit(key_surf, key_rect)
+
+            label_surf = btn_font.render(label, True, color)
+            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
+
+    # --- MÀN HÌNH PAUSE (Đã bỏ chữ SYSTEM, nâng cấp UI giống Win) ---
     def draw_pause_screen(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
         
-        font_large = self.get_font(40 * s, bold=True)
-        font_med = self.get_font(18 * s, bold=False)
+        title_font = self.get_font(48 * s, bold=True)
+        btn_font = self.get_font(20 * s, bold=True)
 
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
         overlay.fill((0, 5, 15, 180))
         screen.blit(overlay, (0, 0))
 
-        title = font_large.render("SYSTEM PAUSED", True, WHITE)
-        screen.blit(title, title.get_rect(center=(w // 2, h // 2 - int(30 * s))))
+        # Đổi thành PAUSED
+        title = title_font.render("PAUSED", True, WHITE)
+        screen.blit(title, title.get_rect(center=(w // 2, h // 2 - int(50 * s))))
 
-        hint = font_med.render("[ESC/SPACE] RESUME   [M] MENU   [Q] QUIT", True, CYAN)
-        screen.blit(hint, hint.get_rect(center=(w // 2, h // 2 + int(20 * s))))
+        controls = [
+            ("ESC", "RESUME", (0, 255, 100)),
+            ("M", "MENU", (200, 200, 200)),
+            ("Q", "QUIT", (255, 80, 80))
+        ]
+        
+        total_btns = len(controls)
+        spacing = int(180 * s)
+        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
+        btn_y = h // 2 + int(40 * s)
 
+        for i, (key, label, color) in enumerate(controls):
+            x_pos = start_x + (i * spacing)
+            
+            key_surf = btn_font.render(f"[{key}]", True, WHITE)
+            key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
+            
+            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
+            screen.blit(key_surf, key_rect)
+
+            label_surf = btn_font.render(label, True, color)
+            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
+
+    # --- MÀN HÌNH THUA (Nâng cấp giao diện Panel giống màn hình Thắng) ---
     def draw_game_over(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
         
-        font_large = self.get_font(44 * s, bold=True)
-        font_med = self.get_font(20 * s, bold=False)
+        title_font = self.get_font(48 * s, bold=True)
+        stats_font = self.get_font(24 * s, bold=False)
+        btn_font = self.get_font(20 * s, bold=True)
 
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-        overlay.fill((25, 5, 5, 200))
+        overlay.fill((25, 5, 5, 200)) # Ám đỏ
         screen.blit(overlay, (0, 0))
 
         alpha = max(100, abs(int(math.sin(self.time_elapsed * 5) * 255)))
-        title = font_large.render("CRITICAL FAILURE", True, (255, 100, 100))
-        title.set_alpha(alpha)
-        screen.blit(title, title.get_rect(center=(w // 2, h // 2 - int(60 * s))))
+        title_surf = title_font.render("CRITICAL FAILURE", True, (255, 100, 100))
+        title_surf.set_alpha(alpha)
+        title_rect = title_surf.get_rect(center=(w // 2, h // 2 - int(120 * s)))
+        screen.blit(title_surf, title_rect)
 
-        stats = font_med.render(f"PILOT: {self.player_name} // STAGE: {self.stage_id} // SCORE: {self.score}", True, WHITE)
-        screen.blit(stats, stats.get_rect(center=(w // 2, h // 2)))
+        # Khung viền đỏ cho Game Over
+        panel_width, panel_height = int(580 * s), int(80 * s)
+        panel_x = (w - panel_width) // 2
+        panel_y = h // 2 - int(40 * s)
+        
+        pygame.draw.rect(screen, (40, 20, 20), (panel_x, panel_y, panel_width, panel_height), border_radius=int(10*s))
+        pygame.draw.rect(screen, (150, 50, 50), (panel_x, panel_y, panel_width, panel_height), max(1, int(2*s)), border_radius=int(10*s))
 
-        hint = font_med.render("[R] RESTART   [M] MAIN MENU   [Q] QUIT", True, (150, 150, 150))
-        screen.blit(hint, hint.get_rect(center=(w // 2, h // 2 + int(45 * s))))
+        pilot_surf = stats_font.render(f"PILOT: {self.player_name}", True, (200, 200, 200))
+        score_surf = stats_font.render(f"SCORE: {self.score}", True, (255, 215, 0))
+        stage_surf = stats_font.render(f"STAGE: {self.stage_id}", True, (255, 100, 100))
+
+        screen.blit(pilot_surf, (panel_x + int(30 * s), panel_y + int(25 * s)))
+        screen.blit(score_surf, (panel_x + int(250 * s), panel_y + int(25 * s)))
+        screen.blit(stage_surf, (panel_x + int(440 * s), panel_y + int(25 * s)))
+
+        controls = [
+            ("R", "RESTART", (0, 255, 100)),
+            ("M", "MENU", (200, 200, 200)),
+            ("Q", "QUIT", (255, 80, 80))
+        ]
+        
+        total_btns = len(controls)
+        spacing = int(180 * s)
+        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
+        btn_y = h // 2 + int(90 * s)
+
+        for i, (key, label, color) in enumerate(controls):
+            x_pos = start_x + (i * spacing)
+            
+            key_surf = btn_font.render(f"[{key}]", True, WHITE)
+            key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
+            
+            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
+            screen.blit(key_surf, key_rect)
+
+            label_surf = btn_font.render(label, True, color)
+            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
 
     def draw(self, screen):
         render_surface = screen
@@ -384,7 +470,6 @@ class PlayState:
 
         self.background.draw(render_surface)
         
-        # --- THAY THẾ cho self.all_sprites.draw() để kích hoạt hiệu ứng vệt lửa của Player ---
         for sprite in self.all_sprites:
             if hasattr(sprite, 'draw'):
                 sprite.draw(render_surface)
