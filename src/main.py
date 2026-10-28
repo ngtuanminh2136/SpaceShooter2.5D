@@ -16,16 +16,20 @@ class Game:
         self.current_height = SCREEN_HEIGHT
         
         self.db = DatabaseManager()
+        
+        # Tải Tiền xu và Cấp độ Nâng cấp lưu từ SQLite
+        self.coins, self.upgrades = self.db.get_player_upgrades()
+        
         active_player = self.db.get_active_player()
         
-        # Nếu chưa có thông tin người chơi -> Chuyển vào màn nhập tên New Pilot
-        # Nếu đã có -> Chuyển thẳng vào Menu và hiện "Welcome Back"
         if active_player is None:
             self.state = NameInputState(self)
         else:
             self.state = MenuState(self)
 
     def change_state(self, new_state):
+        # Lưu dữ liệu nâng cấp và tiền mỗi khi chuyển màn chơi/State
+        self.db.save_player_upgrades(self.coins, self.upgrades)
         self.state = new_state
 
     def run(self):
@@ -34,6 +38,8 @@ class Game:
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    # Lưu dữ liệu vào CSDL trước khi thoát game
+                    self.db.save_player_upgrades(self.coins, self.upgrades)
                     pygame.quit()
                     sys.exit()
                 elif event.type == pygame.VIDEORESIZE:

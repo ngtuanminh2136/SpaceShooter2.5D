@@ -35,6 +35,18 @@ class DatabaseManager:
                 last_login TEXT NOT NULL
             )
         ''')
+
+        # Bảng lưu Tiền xu (Coins) và Cấp độ Nâng cấp (Upgrades)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS player_upgrades (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                coins INTEGER DEFAULT 0,
+                hp_lvl INTEGER DEFAULT 0,
+                damage_lvl INTEGER DEFAULT 0,
+                speed_lvl INTEGER DEFAULT 0,
+                shield_lvl INTEGER DEFAULT 0
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -60,6 +72,37 @@ class DatabaseManager:
                 player_name = excluded.player_name,
                 last_login = excluded.last_login
         ''', (player_name, now))
+        conn.commit()
+        conn.close()
+
+    def get_player_upgrades(self):
+        """Tải số Coins và các cấp độ nâng cấp từ SQLite"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT coins, hp_lvl, damage_lvl, speed_lvl, shield_lvl FROM player_upgrades WHERE id = 1')
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            coins, hp, dmg, spd, shd = row
+            return coins, {'hp': hp, 'damage': dmg, 'speed': spd, 'shield': shd}
+        else:
+            return 0, {'hp': 0, 'damage': 0, 'speed': 0, 'shield': 0}
+
+    def save_player_upgrades(self, coins, upgrades):
+        """Lưu hoặc cập nhật Coins và các cấp độ nâng cấp vào SQLite"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO player_upgrades (id, coins, hp_lvl, damage_lvl, speed_lvl, shield_lvl)
+            VALUES (1, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                coins = excluded.coins,
+                hp_lvl = excluded.hp_lvl,
+                damage_lvl = excluded.damage_lvl,
+                speed_lvl = excluded.speed_lvl,
+                shield_lvl = excluded.shield_lvl
+        ''', (coins, upgrades.get('hp', 0), upgrades.get('damage', 0), upgrades.get('speed', 0), upgrades.get('shield', 0)))
         conn.commit()
         conn.close()
 

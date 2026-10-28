@@ -12,13 +12,20 @@ class MenuState:
         self.db = DatabaseManager()
         self.active_player = self.db.get_active_player() or "PILOT"
 
-        # Khởi tạo quản lý âm thanh và phát nhạc nền lặp vô hạn ở Menu
         self.sound_manager = SoundManager()
         self.sound_manager.play_music('forest_2.ogg', volume=0.3)
         
         self.font_cache = {}
         
-        self.options = ["PLAY", "SANDBOX (STAGE)", "COLLECTION (PILOT)", "LEADERBOARD", "QUIT"]
+        # ĐẶT LẠI TÊN MENU DỄ HIỂU HƠN
+        self.options = [
+            "START GAME", 
+            "SELECT LEVEL", 
+            "UPGRADE SHIP", 
+            "CHANGE NAME", 
+            "HIGH SCORES", 
+            "EXIT"
+        ]
         self.selected_index = 0
         self.selected_stage = 1
         self.option_rects = []
@@ -46,13 +53,11 @@ class MenuState:
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
 
-        # Xử lý khi đang mở bảng Leaderboard
         if self.show_leaderboard:
             if event.type == pygame.MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key not in {pygame.K_PRINTSCREEN, pygame.K_PRINT, pygame.K_SYSREQ}):
                 self.show_leaderboard = False
             return
 
-        # Xử lý khi đang mở bảng chọn Stage
         if self.show_stage_select:
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_LEFT, pygame.K_a):
@@ -95,7 +100,6 @@ class MenuState:
                             break
             return
 
-        # Xử lý menu chính
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_UP, pygame.K_w):
                 self.selected_index = (self.selected_index - 1) % len(self.options)
@@ -103,6 +107,9 @@ class MenuState:
                 self.selected_index = (self.selected_index + 1) % len(self.options)
             elif event.key == pygame.K_RETURN:
                 self.select_option()
+            elif event.key == pygame.K_u: # Bấm phím U để mở Upgrade
+                from states.shop_state import ShopState
+                self.game.change_state(ShopState(self.game, return_state="menu"))
             elif event.key == pygame.K_q:
                 pygame.quit()
                 sys.exit()
@@ -128,11 +135,14 @@ class MenuState:
         elif self.selected_index == 1:
             self.show_stage_select = True
         elif self.selected_index == 2:
+            from states.shop_state import ShopState
+            self.game.change_state(ShopState(self.game, return_state="menu"))
+        elif self.selected_index == 3:
             from states.name_input_state import NameInputState
             self.game.change_state(NameInputState(self.game))
-        elif self.selected_index == 3:
-            self.show_leaderboard = True
         elif self.selected_index == 4:
+            self.show_leaderboard = True
+        elif self.selected_index == 5:
             pygame.quit()
             sys.exit()
 
@@ -142,8 +152,13 @@ class MenuState:
     def draw_cinematic_background(self, screen, w, h):
         actual_w, actual_h = screen.get_size()
         current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Lùi 2 cấp về thư mục gốc D:\ để vào assets/menu.jpg
         bg_path = os.path.join(current_dir, "..", "..", "assets", "menu.jpg")
         
+        if hasattr(sys, '_MEIPASS'):
+            bg_path = os.path.join(sys._MEIPASS, "assets", "menu.jpg")
+
         if os.path.exists(bg_path):
             try:
                 img = pygame.image.load(bg_path).convert()
@@ -165,26 +180,24 @@ class MenuState:
         self.draw_cinematic_background(screen, w, h)
 
         font_logo = self.get_font(48 * s, bold=True)
-        font_logo_sub = self.get_font(16 * s, bold=True)
         font_menu = self.get_font(22 * s, bold=True) 
         font_hint = self.get_font(14 * s, bold=True) 
 
         left_margin = int(w * 0.12) 
 
+        # 1. Logo chính tiêu đề Game
         logo_text = "S P A C E   S H O O T E R"
         logo_surf = font_logo.render(logo_text, True, WHITE)
-        screen.blit(logo_surf, (left_margin, int(h * 0.15)))
+        screen.blit(logo_surf, (left_margin, int(h * 0.12)))
 
-        line_y = int(h * 0.15) + logo_surf.get_height() + int(10 * s)
+        # Đường gạch trang trí màu Cyan dưới logo
+        line_y = int(h * 0.12) + logo_surf.get_height() + int(10 * s)
         pygame.draw.line(screen, CYAN, (left_margin, line_y), (left_margin + int(250 * s), line_y), 2)
 
-        sub_logo_text = "V O I D   P R O T O C O L"
-        sub_logo = font_logo_sub.render(sub_logo_text, True, CYAN)
-        screen.blit(sub_logo, (left_margin, line_y + int(8 * s)))
-
+        # 2. Danh sách tùy chọn Menu
         self.option_rects = []
-        start_y = int(h * 0.38)
-        spacing = int(45 * s)
+        start_y = line_y + int(25 * s) # Căn khoảng cách bắt đầu Menu ngay dưới đường kẻ
+        spacing = int(42 * s)
 
         for i, option in enumerate(self.options):
             y_pos = start_y + i * spacing
@@ -192,7 +205,7 @@ class MenuState:
             text_color = CYAN if is_selected else (240, 245, 255)
             
             option_surf = font_menu.render(option, True, text_color)
-            hit_rect = pygame.Rect(left_margin - int(40 * s), y_pos - int(10 * s), int(350 * s), int(40 * s))
+            hit_rect = pygame.Rect(left_margin - int(40 * s), y_pos - int(8 * s), int(350 * s), int(38 * s))
             self.option_rects.append(hit_rect)
 
             if is_selected:
@@ -208,15 +221,17 @@ class MenuState:
             
             screen.blit(option_surf, (left_margin, y_pos))
 
-        hint_str = "[W/S] NAVIGATE   [ENTER] SELECT   [Q] QUIT"
+        # Dòng hướng dẫn phím tắt ở chân màn hình
+        hint_str = "[W/S] NAVIGATE   [ENTER] SELECT   [U] UPGRADE   [Q] QUIT"
         hint_surf = font_hint.render(hint_str, True, (200, 220, 240)) 
-        screen.blit(hint_surf, (left_margin, h - int(40 * s)))
+        screen.blit(hint_surf, (left_margin, h - int(35 * s)))
 
+        # 3. Profile Card (Thông tin người chơi & Tiền) ở góc trên bên phải
         right_margin = w - int(w * 0.05)
-        panel_w = int(220 * s)
-        panel_h = int(65 * s)
+        panel_w = int(240 * s)
+        panel_h = int(85 * s)
         panel_x = right_margin - panel_w
-        panel_y = int(25 * s)
+        panel_y = int(20 * s)
 
         panel_bg_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
         panel_bg_surf.fill((5, 15, 30, 220))
@@ -230,7 +245,7 @@ class MenuState:
 
         hex_radius = int(16 * s)
         hex_cx = panel_x + int(30 * s)
-        hex_cy = panel_y + int(24 * s)
+        hex_cy = panel_y + int(28 * s)
         
         points = []
         for i in range(6):
@@ -252,8 +267,12 @@ class MenuState:
         screen.blit(pilot_text, (text_x, panel_y + int(10 * s)))
         
         curr_stg = STAGE_CONFIGS[self.selected_stage]
-        stg_text = font_small.render(f"SYS.STAGE // {self.selected_stage} [{curr_stg['name']}]", True, curr_stg["color"])
+        stg_text = font_small.render(f"LEVEL // {self.selected_stage} [{curr_stg['name']}]", True, curr_stg["color"])
         screen.blit(stg_text, (text_x, panel_y + int(30 * s)))
+
+        coins_val = getattr(self.game, 'coins', 0)
+        credits_text = font_small.render(f"CREDITS // {coins_val} COINS", True, (255, 215, 0))
+        screen.blit(credits_text, (text_x, panel_y + int(50 * s)))
 
         if self.show_stage_select:
             self.draw_stage_select(screen)
@@ -264,7 +283,6 @@ class MenuState:
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
 
-        # Phủ lớp nền tối mờ sâu hơn để làm nổi bật các card stage
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
         overlay.fill((5, 10, 20, 240)) 
         screen.blit(overlay, (0, 0))
@@ -272,9 +290,9 @@ class MenuState:
         font_title = self.get_font(36 * s, bold=True)
         font_option = self.get_font(20 * s, bold=True)
         font_sub = self.get_font(15 * s, bold=True)
-        font_detail = self.get_font(14 * s, bold=True)  # Tăng kích thước và độ đậm chữ chi tiết
+        font_detail = self.get_font(14 * s, bold=True)
 
-        title = font_title.render("SELECT DIFFICULTY STAGE", True, CYAN)
+        title = font_title.render("SELECT DIFFICULTY LEVEL", True, CYAN)
         screen.blit(title, title.get_rect(center=(w // 2, int(h * 0.09))))
 
         card_w = int(min(210 * s, (w - 80 * s) / 4))
@@ -285,12 +303,10 @@ class MenuState:
 
         for stg in range(1, 5):
             cx = start_x + (stg - 1) * (card_w + spacing)
-            card_rect = pygame.Rect(cx, card_y, card_w, card_h)
             
             is_selected = (stg == self.selected_stage)
             cfg = STAGE_CONFIGS[stg]
             
-            # Làm nền card sáng hơn một chút khi được chọn để dễ phân biệt
             bg_color = (25, 40, 60, 230) if is_selected else (15, 22, 32, 200)
             border_color = cfg["color"] if is_selected else (50, 70, 95)
             
@@ -299,13 +315,12 @@ class MenuState:
             pygame.draw.rect(shape_surf, border_color, shape_surf.get_rect(), width=int(2 * s) if is_selected else int(1 * s), border_radius=int(8 * s))
             screen.blit(shape_surf, (cx, card_y))
 
-            stg_txt = font_option.render(f"STAGE {stg}", True, cfg["color"] if is_selected else WHITE)
+            stg_txt = font_option.render(f"LEVEL {stg}", True, cfg["color"] if is_selected else WHITE)
             screen.blit(stg_txt, stg_txt.get_rect(center=(cx + card_w // 2, card_y + int(30 * s))))
 
             name_txt = font_sub.render(cfg["name"], True, cfg["color"])
             screen.blit(name_txt, name_txt.get_rect(center=(cx + card_w // 2, card_y + int(58 * s))))
 
-            # Đổi màu tagline thành màu sáng dễ đọc hơn
             tagline_txt = font_detail.render(cfg["tagline"], True, (210, 225, 240))
             screen.blit(tagline_txt, tagline_txt.get_rect(center=(cx + card_w // 2, card_y + int(80 * s))))
 
@@ -319,7 +334,6 @@ class MenuState:
                 f"Boss Score: {cfg['boss_spawn_score']}"
             ]
             for idx, d_str in enumerate(details):
-                # Dùng màu TRẮNG SÁNG (WHITE) thay vì xám mờ để dễ nhìn tuyệt đối
                 d_txt = font_detail.render(d_str, True, (255, 255, 255))
                 screen.blit(d_txt, (cx + int(15 * s), card_y + int(115 * s + idx * 27 * s)))
 

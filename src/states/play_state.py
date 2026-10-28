@@ -85,6 +85,13 @@ class PlayState:
 
     def handle_events(self, event):
         if event.type == pygame.KEYDOWN:
+            if self.is_game_over or self.is_victory or self.is_paused:
+                if event.key == pygame.K_s:
+                    from states.shop_state import ShopState
+                    self.game.current_stage = self.stage_id
+                    self.game.change_state(ShopState(self.game, return_state="play"))
+                    return
+
             if self.is_game_over or self.is_victory:
                 if event.key == pygame.K_n and self.is_victory and self.stage_id < 4:
                     self.game.change_state(PlayState(self.game, stage_id=self.stage_id + 1))
@@ -143,26 +150,31 @@ class PlayState:
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
         for enemy, bullets_hit in hits.items():
             for bullet in bullets_hit:
-                enemy.take_damage(10)
+                dmg = getattr(bullet, 'damage', 10)
+                enemy.take_damage(dmg)
+                
                 if enemy.hp <= 0:
                     self.sound_manager.play('explosion')
                     self.total_kills += 1
                     
                     if isinstance(enemy, Boss):
                         self.score += 1000
+                        if hasattr(self.game, 'coins'): self.game.coins += 200
                         self.boss = None
-                        # CHỈNH SỬA TẠI ĐÂY: Giảm rung khi đạn bắn chết Boss
                         self.trigger_shake(duration=0.4, intensity=5)
                         self.is_victory = True
+                        enemy.kill()
                     else:
                         self.score += 100
-                        if random.random() < 0.25:
-                            item_type = random.choice(['heal', 'triple_shot'])
+                        if hasattr(self.game, 'coins'): self.game.coins += 15
+                        if random.random() < 0.30:
+                            item_type = random.choice(['heal', 'triple_shot', 'shield'])
                             Item(enemy.pos.x, enemy.pos.y, item_type, [self.all_sprites, self.items], self.game)
+                        enemy.kill()
 
         bullet_hits = pygame.sprite.spritecollide(self.player, self.enemy_bullets, True)
         for bullet in bullet_hits:
-            self.player.hp -= 15
+            self.player.take_damage(15)
             self.sound_manager.play('hit')
             if self.player.hp <= 0:
                 self.player.hp = 0
@@ -175,18 +187,31 @@ class PlayState:
                 self.player.hp = min(self.player.max_hp, self.player.hp + 30)
             elif item.item_type == 'triple_shot':
                 self.player.triple_shot_timer = 7.0
+            elif item.item_type == 'shield':
+                self.player.shield = min(self.player.max_shield, self.player.shield + 50)
 
-        player_hits = pygame.sprite.spritecollide(self.player, self.enemies, True)
+        # VA CHẠM KHÔNG XÓA BOSS NGAY LẬP TỨC (False)
+        player_hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for hit in player_hits:
             self.sound_manager.play('hit')
             if isinstance(hit, Boss):
-                self.player.hp -= 50
-                self.boss = None
-                # CHỈNH SỬA TẠI ĐÂY: Giảm rung khi người chơi đâm trúng Boss chết
-                self.trigger_shake(duration=0.4, intensity=5)
-                self.is_victory = True
+                self.player.take_damage(40)
+                hit.take_damage(20)
+                
+                self.player.pos.y += 35
+                self.player.rect.centery = int(self.player.pos.y)
+                
+                if hit.hp <= 0:
+                    self.sound_manager.play('explosion')
+                    self.score += 1000
+                    if hasattr(self.game, 'coins'): self.game.coins += 200
+                    self.boss = None
+                    self.trigger_shake(duration=0.4, intensity=5)
+                    self.is_victory = True
+                    hit.kill()
             else:
-                self.player.hp -= 20
+                self.player.take_damage(20)
+                hit.kill()
                 
             if self.player.hp <= 0:
                 self.player.hp = 0
@@ -231,7 +256,7 @@ class PlayState:
         font_detail = self.get_font(11 * s, bold=False)
 
         panel_w = int(240 * s)
-        panel_h = int(120 * s)
+        panel_h = int(140 * s)
         hud_bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
         hud_bg.fill((0, 5, 15, 120))
         screen.blit(hud_bg, (0, 0))
@@ -259,20 +284,23 @@ class PlayState:
         self.draw_text_with_shadow(screen, "KILLS //", font_hud, label_color, (col1_x, start_y + line_space * 2))
         self.draw_text_with_shadow(screen, str(self.total_kills), font_value, WHITE, (col2_x, start_y + line_space * 2 - int(3 * s)))
 
+        coins_val = getattr(self.game, 'coins', 0)
+        self.draw_text_with_shadow(screen, "CREDITS //", font_hud, label_color, (col1_x, start_y + line_space * 3))
+        self.draw_text_with_shadow(screen, f"{coins_val} C", font_value, (255, 215, 0), (col2_x, start_y + line_space * 3 - int(3 * s)))
+
         prog_w = int(200 * s)
         prog_h = int(2 * s)
         prog_x = pad + int(10 * s)
-        prog_y = start_y + line_space * 3 + int(10 * s)
+        prog_y = start_y + line_space * 4 + int(5 * s)
         
         target_score = self.stage_config["boss_spawn_score"]
         ratio = min(1.0, self.score / target_score) if target_score > 0 else 1.0
         
         pygame.draw.rect(screen, (50, 60, 80), (prog_x, prog_y, prog_w, prog_h))
         pygame.draw.rect(screen, CYAN, (prog_x, prog_y, prog_w * ratio, prog_h))
-        self.draw_text_with_shadow(screen, f"BOSS PROTOCOL: {int(ratio*100)}%", font_detail, (150, 180, 200), (prog_x, prog_y + int(5 * s)))
 
         if self.boss and self.boss.alive():
-            boss_hp_ratio = self.boss.hp / self.boss.max_hp
+            boss_hp_ratio = max(0, self.boss.hp / self.boss.max_hp)
             bar_w = int(min(400 * s, w * 0.5))
             bar_h = int(6 * s)
             bar_x = (w - bar_w) // 2
@@ -295,25 +323,25 @@ class PlayState:
             pygame.draw.line(screen, WHITE, (bar_x, bar_y - int(4 * s)), (bar_x, bar_y + bar_h + int(4 * s)), 2)
             pygame.draw.line(screen, WHITE, (bar_x + bar_w, bar_y - int(4 * s)), (bar_x + bar_w, bar_y + bar_h + int(4 * s)), 2)
 
-    # --- MÀN HÌNH THẮNG (Đã bỏ chữ SYS, giữ UI chuẩn) ---
     def draw_victory_screen(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
         
         title_font = self.get_font(48 * s, bold=True)
         stats_font = self.get_font(24 * s, bold=False)
-        btn_font = self.get_font(20 * s, bold=True)
+        btn_font = self.get_font(18 * s, bold=True)
 
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
         overlay.fill((10, 15, 25, 200))
         screen.blit(overlay, (0, 0))
 
-        # Đổi thành STAGE CLEARED
+        # Tiêu đề Stage Cleared
         title_text = f"STAGE {self.stage_id} CLEARED"
         title_surf = title_font.render(title_text, True, CYAN)
         title_rect = title_surf.get_rect(center=(w // 2, h // 2 - int(120 * s)))
         screen.blit(title_surf, title_rect)
 
+        # Panel thông số kết quả (Pilot, Score, Kills)
         panel_width, panel_height = int(580 * s), int(80 * s)
         panel_x = (w - panel_width) // 2
         panel_y = h // 2 - int(40 * s)
@@ -326,42 +354,57 @@ class PlayState:
         kills_surf = stats_font.render(f"KILLS: {self.total_kills}", True, (255, 100, 100))
 
         screen.blit(pilot_surf, (panel_x + int(30 * s), panel_y + int(25 * s)))
-        screen.blit(score_surf, (panel_x + int(250 * s), panel_y + int(25 * s)))
-        screen.blit(kills_surf, (panel_x + int(440 * s), panel_y + int(25 * s)))
+        screen.blit(score_surf, (panel_x + int(230 * s), panel_y + int(25 * s)))
+        screen.blit(kills_surf, (panel_x + int(430 * s), panel_y + int(25 * s)))
 
+        # --- TÍNH TOÁN CĂN GIỮA NÚT ĐIỀU KHIỂN RỘNG RÃI, KHÔNG BỊ ĐÈ CHỮ ---
         if self.stage_id < 4:
             controls = [
                 ("N", "NEXT STAGE", (0, 255, 100)),
+                ("S", "SHOP", (255, 215, 0)),
                 ("R", "REPLAY", (200, 200, 200)),
-                ("M", "MENU", (200, 200, 200)),
-                ("Q", "QUIT", (255, 80, 80))
+                ("M", "MENU", (200, 200, 200))
             ]
         else:
             controls = [
+                ("S", "SHOP", (255, 215, 0)),
                 ("R", "REPLAY", (200, 200, 200)),
-                ("M", "MENU", (200, 200, 200)),
-                ("Q", "QUIT", (255, 80, 80))
+                ("M", "MENU", (200, 200, 200))
             ]
         
-        total_btns = len(controls)
-        spacing = int(180 * s)
-        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
-        btn_y = h // 2 + int(90 * s)
+        # Render trước các nút để tính tổng chiều rộng thực tế
+        rendered_btns = []
+        total_width = 0
+        btn_gap = int(25 * s) # Khoảng cách giữa các nút
 
-        for i, (key, label, color) in enumerate(controls):
-            x_pos = start_x + (i * spacing)
-            
+        for key, label, color in controls:
             key_surf = btn_font.render(f"[{key}]", True, WHITE)
-            key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
+            lbl_surf = btn_font.render(label, True, color)
             
-            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            # Chiều rộng 1 cụm gồm phím + nhãn
+            group_w = key_surf.get_width() + int(8 * s) + lbl_surf.get_width()
+            rendered_btns.append((key_surf, lbl_surf, group_w))
+            total_width += group_w
+
+        total_width += btn_gap * (len(controls) - 1)
+        
+        # Bắt đầu vẽ từ tọa độ X được căn đúng giữa màn hình
+        start_x = (w - total_width) // 2
+        btn_y = h // 2 + int(90 * s)
+        current_x = start_x
+
+        for key_surf, lbl_surf, group_w in rendered_btns:
+            # Vẽ khung xám cho phím [Key]
+            bg_rect = key_surf.get_rect(topleft=(current_x, btn_y)).inflate(int(12*s), int(8*s))
             pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
-            screen.blit(key_surf, key_rect)
+            screen.blit(key_surf, (current_x, btn_y))
 
-            label_surf = btn_font.render(label, True, color)
-            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
+            # Vẽ nhãn chữ ngay sau khung phím
+            screen.blit(lbl_surf, (bg_rect.right + int(8*s), btn_y))
+            
+            # Tăng vị trí X cho nút tiếp theo
+            current_x += group_w + btn_gap
 
-    # --- MÀN HÌNH PAUSE (Đã bỏ chữ SYSTEM, nâng cấp UI giống Win) ---
     def draw_pause_screen(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
@@ -373,19 +416,19 @@ class PlayState:
         overlay.fill((0, 5, 15, 180))
         screen.blit(overlay, (0, 0))
 
-        # Đổi thành PAUSED
         title = title_font.render("PAUSED", True, WHITE)
         screen.blit(title, title.get_rect(center=(w // 2, h // 2 - int(50 * s))))
 
         controls = [
             ("ESC", "RESUME", (0, 255, 100)),
+            ("S", "SHOP", (255, 215, 0)),
             ("M", "MENU", (200, 200, 200)),
             ("Q", "QUIT", (255, 80, 80))
         ]
         
         total_btns = len(controls)
-        spacing = int(180 * s)
-        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
+        spacing = int(140 * s)
+        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(40 * s)
         btn_y = h // 2 + int(40 * s)
 
         for i, (key, label, color) in enumerate(controls):
@@ -394,14 +437,13 @@ class PlayState:
             key_surf = btn_font.render(f"[{key}]", True, WHITE)
             key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
             
-            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            bg_rect = key_rect.inflate(int(12*s), int(8*s))
             pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
             screen.blit(key_surf, key_rect)
 
             label_surf = btn_font.render(label, True, color)
-            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
+            screen.blit(label_surf, (bg_rect.right + int(8*s), btn_y))
 
-    # --- MÀN HÌNH THUA (Nâng cấp giao diện Panel giống màn hình Thắng) ---
     def draw_game_over(self, screen):
         s = self.get_scale_factor()
         w, h = self.game.current_width, self.game.current_height
@@ -411,7 +453,7 @@ class PlayState:
         btn_font = self.get_font(20 * s, bold=True)
 
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-        overlay.fill((25, 5, 5, 200)) # Ám đỏ
+        overlay.fill((25, 5, 5, 200))
         screen.blit(overlay, (0, 0))
 
         alpha = max(100, abs(int(math.sin(self.time_elapsed * 5) * 255)))
@@ -420,7 +462,6 @@ class PlayState:
         title_rect = title_surf.get_rect(center=(w // 2, h // 2 - int(120 * s)))
         screen.blit(title_surf, title_rect)
 
-        # Khung viền đỏ cho Game Over
         panel_width, panel_height = int(580 * s), int(80 * s)
         panel_x = (w - panel_width) // 2
         panel_y = h // 2 - int(40 * s)
@@ -438,13 +479,14 @@ class PlayState:
 
         controls = [
             ("R", "RESTART", (0, 255, 100)),
+            ("S", "SHOP", (255, 215, 0)),
             ("M", "MENU", (200, 200, 200)),
             ("Q", "QUIT", (255, 80, 80))
         ]
         
         total_btns = len(controls)
-        spacing = int(180 * s)
-        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(45 * s)
+        spacing = int(140 * s)
+        start_x = (w - (spacing * (total_btns - 1))) // 2 - int(40 * s)
         btn_y = h // 2 + int(90 * s)
 
         for i, (key, label, color) in enumerate(controls):
@@ -453,12 +495,12 @@ class PlayState:
             key_surf = btn_font.render(f"[{key}]", True, WHITE)
             key_rect = key_surf.get_rect(topleft=(x_pos, btn_y))
             
-            bg_rect = key_rect.inflate(int(16*s), int(10*s))
+            bg_rect = key_rect.inflate(int(12*s), int(8*s))
             pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
             screen.blit(key_surf, key_rect)
 
             label_surf = btn_font.render(label, True, color)
-            screen.blit(label_surf, (bg_rect.right + int(10*s), btn_y))
+            screen.blit(label_surf, (bg_rect.right + int(8*s), btn_y))
 
     def draw(self, screen):
         render_surface = screen

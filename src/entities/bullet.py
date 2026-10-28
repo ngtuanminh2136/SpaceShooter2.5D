@@ -10,6 +10,9 @@ class Bullet(pygame.sprite.Sprite):
         self.is_enemy = is_enemy
         self.speed = 400 if is_enemy else 700
         
+        # Sát thương mặc định là 10 (sẽ được ghi đè bởi chỉ số nâng cấp của Player)
+        self.damage = 10
+        
         if isinstance(direction_or_target, pygame.math.Vector2):
             self.dx = direction_or_target.x
             self.dy = direction_or_target.y
@@ -40,11 +43,9 @@ class Bullet(pygame.sprite.Sprite):
         self.pos.y += self.dy * self.speed * dt
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
-        # Lấy kích thước màn hình động (hỗ trợ cả Fullscreen và Windowed)
         max_w = self.game.current_width if (self.game and hasattr(self.game, 'current_width')) else SCREEN_WIDTH
         max_h = self.game.current_height if (self.game and hasattr(self.game, 'current_height')) else SCREEN_HEIGHT
 
-        # Chỉ hủy đạn khi bay ra hẳn ngoài biên màn hình động một khoảng an toàn lớn (ví dụ 300px)
         if (self.rect.right < -300 or self.rect.left > max_w + 300 or
             self.rect.bottom < -300 or self.rect.top > max_h + 300):
             self.kill()
