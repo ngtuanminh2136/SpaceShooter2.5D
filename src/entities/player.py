@@ -21,14 +21,13 @@ class Player(pygame.sprite.Sprite):
         
         self.pos = pygame.math.Vector2(self.rect.center)
 
-        # --- LẤY CHỈ SỐ NÂNG CẤP TỪ GAME ---
         upgrades = getattr(self.game, 'upgrades', {'hp': 0, 'damage': 0, 'speed': 0, 'shield': 0})
         
         self.max_hp = PLAYER_HP + upgrades['hp'] * 20
         self.hp = self.max_hp
         
         self.max_shield = 50 + upgrades['shield'] * 15
-        self.shield = 0  # Giáp ban đầu bằng 0, nhặt item để nạp
+        self.shield = 0
 
         self.speed = PLAYER_SPEED + upgrades['speed'] * 25
         self.bullet_damage = 10 + upgrades['damage'] * 5
@@ -39,7 +38,6 @@ class Player(pygame.sprite.Sprite):
         self.triple_shot_timer = 0
 
     def take_damage(self, amount):
-        """Khấu trừ Giáp trước khi trừ Máu"""
         if self.shield > 0:
             if self.shield >= amount:
                 self.shield -= amount
@@ -78,7 +76,6 @@ class Player(pygame.sprite.Sprite):
         self.pos += direction * self.speed * dt
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
-        # Giới hạn khung hình
         if self.rect.left < 0:
             self.rect.left = 0
         elif self.rect.right > self.game.current_width:
@@ -119,7 +116,6 @@ class Player(pygame.sprite.Sprite):
         surface.blit(trail_surf, (trail_pos.x - 35 * s, trail_pos.y - 35 * s))
 
     def draw_shield(self, surface):
-        """Vẽ hiệu ứng Vòng giáp bảo vệ khi shield > 0"""
         if self.shield > 0:
             s = self.game.get_scale_factor() if hasattr(self.game, 'get_scale_factor') else 1.0
             padding = int(18 * s)
@@ -148,6 +144,9 @@ class Player(pygame.sprite.Sprite):
 
     def shoot(self):
         mouse_pressed = pygame.mouse.get_pressed()
+        current_cooldown = 0.08 if self.triple_shot_timer > 0 else 0.15
+        
+        # Kiểm tra trạng thái giữ chuột liên tục, đồng thời kiểm tra timer
         if mouse_pressed[0] and self.shoot_timer <= 0:
             mouse_x, mouse_y = pygame.mouse.get_pos()
             direction = pygame.math.Vector2(mouse_x - self.pos.x, mouse_y - self.pos.y)
@@ -172,7 +171,7 @@ class Player(pygame.sprite.Sprite):
             if hasattr(self.game.state, 'sound_manager'):
                 self.game.state.sound_manager.play('laser')
 
-            self.shoot_timer = self.shoot_cooldown
+            self.shoot_timer = current_cooldown
 
     def draw(self, surface):
         self.draw_engine_trail(surface)

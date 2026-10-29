@@ -162,6 +162,9 @@ class PlayState:
                         if hasattr(self.game, 'coins'): self.game.coins += 200
                         self.boss = None
                         self.trigger_shake(duration=0.4, intensity=5)
+                        
+                        if not self.is_victory:
+                            self.sound_manager.play('victory')
                         self.is_victory = True
                         enemy.kill()
                     else:
@@ -180,17 +183,25 @@ class PlayState:
                 self.player.hp = 0
                 self.is_game_over = True
 
+        # TĂNG ÂM LƯỢNG / ĐẶT ÂM THANH RÕ RÀNG KHI NHẬT VẬT PHẨM (NẾU SOUND MANAGER HỖ TRỢ SET_VOLUME)
         item_hits = pygame.sprite.spritecollide(self.player, self.items, True)
         for item in item_hits:
-            self.sound_manager.play('powerup')
             if item.item_type == 'heal':
+                if 'pickup_health' in self.sound_manager.sounds and self.sound_manager.sounds['pickup_health']:
+                    self.sound_manager.sounds['pickup_health'].set_volume(0.9) # Chỉnh âm lượng to rõ (90%)
+                self.sound_manager.play('pickup_health')
                 self.player.hp = min(self.player.max_hp, self.player.hp + 30)
             elif item.item_type == 'triple_shot':
+                if 'pickup_triple' in self.sound_manager.sounds and self.sound_manager.sounds['pickup_triple']:
+                    self.sound_manager.sounds['pickup_triple'].set_volume(0.9)
+                self.sound_manager.play('pickup_triple')
                 self.player.triple_shot_timer = 7.0
             elif item.item_type == 'shield':
+                if 'pickup_shield' in self.sound_manager.sounds and self.sound_manager.sounds['pickup_shield']:
+                    self.sound_manager.sounds['pickup_shield'].set_volume(0.9)
+                self.sound_manager.play('pickup_shield')
                 self.player.shield = min(self.player.max_shield, self.player.shield + 50)
 
-        # VA CHẠM KHÔNG XÓA BOSS NGAY LẬP TỨC (False)
         player_hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for hit in player_hits:
             self.sound_manager.play('hit')
@@ -207,6 +218,9 @@ class PlayState:
                     if hasattr(self.game, 'coins'): self.game.coins += 200
                     self.boss = None
                     self.trigger_shake(duration=0.4, intensity=5)
+                    
+                    if not self.is_victory:
+                        self.sound_manager.play('victory')
                     self.is_victory = True
                     hit.kill()
             else:
@@ -335,13 +349,11 @@ class PlayState:
         overlay.fill((10, 15, 25, 200))
         screen.blit(overlay, (0, 0))
 
-        # Tiêu đề Stage Cleared
         title_text = f"STAGE {self.stage_id} CLEARED"
         title_surf = title_font.render(title_text, True, CYAN)
         title_rect = title_surf.get_rect(center=(w // 2, h // 2 - int(120 * s)))
         screen.blit(title_surf, title_rect)
 
-        # Panel thông số kết quả (Pilot, Score, Kills)
         panel_width, panel_height = int(580 * s), int(80 * s)
         panel_x = (w - panel_width) // 2
         panel_y = h // 2 - int(40 * s)
@@ -357,7 +369,6 @@ class PlayState:
         screen.blit(score_surf, (panel_x + int(230 * s), panel_y + int(25 * s)))
         screen.blit(kills_surf, (panel_x + int(430 * s), panel_y + int(25 * s)))
 
-        # --- TÍNH TOÁN CĂN GIỮA NÚT ĐIỀU KHIỂN RỘNG RÃI, KHÔNG BỊ ĐÈ CHỮ ---
         if self.stage_id < 4:
             controls = [
                 ("N", "NEXT STAGE", (0, 255, 100)),
@@ -372,37 +383,29 @@ class PlayState:
                 ("M", "MENU", (200, 200, 200))
             ]
         
-        # Render trước các nút để tính tổng chiều rộng thực tế
         rendered_btns = []
         total_width = 0
-        btn_gap = int(25 * s) # Khoảng cách giữa các nút
+        btn_gap = int(25 * s)
 
         for key, label, color in controls:
             key_surf = btn_font.render(f"[{key}]", True, WHITE)
             lbl_surf = btn_font.render(label, True, color)
             
-            # Chiều rộng 1 cụm gồm phím + nhãn
             group_w = key_surf.get_width() + int(8 * s) + lbl_surf.get_width()
             rendered_btns.append((key_surf, lbl_surf, group_w))
             total_width += group_w
 
         total_width += btn_gap * (len(controls) - 1)
         
-        # Bắt đầu vẽ từ tọa độ X được căn đúng giữa màn hình
         start_x = (w - total_width) // 2
         btn_y = h // 2 + int(90 * s)
         current_x = start_x
 
         for key_surf, lbl_surf, group_w in rendered_btns:
-            # Vẽ khung xám cho phím [Key]
             bg_rect = key_surf.get_rect(topleft=(current_x, btn_y)).inflate(int(12*s), int(8*s))
             pygame.draw.rect(screen, (50, 55, 70), bg_rect, border_radius=int(5*s))
             screen.blit(key_surf, (current_x, btn_y))
-
-            # Vẽ nhãn chữ ngay sau khung phím
             screen.blit(lbl_surf, (bg_rect.right + int(8*s), btn_y))
-            
-            # Tăng vị trí X cho nút tiếp theo
             current_x += group_w + btn_gap
 
     def draw_pause_screen(self, screen):
